@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+
+    <title>Web Tạo Hóa Đơn</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        .actions {
+            margin-top: 20px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tạo Hóa Đơn</h1>
+
+        <!-- A. Thông tin shop -->
+        <h2>Thông tin shop</h2>
+        <div class="input-group">
+            <label for="shop-name">Tên shop</label>
+            <select id="shop-name" onchange="updateShopInfo()">
+                <!-- Options will be populated dynamically -->
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="shop-phone">Số điện thoại</label>
+            <input type="text" id="shop-phone" readonly>
+        </div>
+        <div class="input-group">
+            <label for="invoice-id">Mã hóa đơn</label>
+            <input type="text" id="invoice-id" readonly>
+        </div>
+        <div class="input-group">
+            <label for="invoice-date">Ngày, giờ tạo đơn</label>
+            <input type="text" id="invoice-date" readonly>
+        </div>
+
+        <!-- B. Thông tin khách hàng -->
+        <h2>Thông tin khách hàng</h2>
+        <div class="input-group">
+            <label for="customer-name">Tên khách hàng</label>
+            <input type="text" id="customer-name" required>
+        </div>
+        <div class="input-group">
+            <label for="customer-phone">Số điện thoại</label>
+            <input type="text" id="customer-phone">
+        </div>
+        <div class="input-group">
+            <label for="customer-address">Địa chỉ</label>
+            <input type="text" id="customer-address">
+        </div>
+
+        <!-- C. Thông tin đơn hàng -->
+        <h2>Thông tin đơn hàng</h2>
+        <table id="order-table">
+            <thead>
+                <tr>
+                    <th>Tên sản phẩm</th>
+                    <th>Đơn giá</th>
+                    <th>Số lượng</th>
+                    <th>Thành tiền</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Hàng sản phẩm sẽ được thêm động ở đây -->
+            </tbody>
+        </table>
+        <button onclick="addProductRow()">Thêm sản phẩm</button>
+
+        <div class="input-group">
+            <label for="total-quantity">Tổng số lượng</label>
+            <input type="text" id="total-quantity" readonly>
+        </div>
+        <div class="input-group">
+            <label for="total-price">Tổng thành tiền</label>
+            <input type="text" id="total-price" readonly>
+        </div>
+        <div class="input-group">
+            <label for="discount">Giảm giá</label>
+            <input type="text" id="discount" value="0" oninput="formatAndCalculateTotal(this, 'discount')">
+        </div>
+        <div class="input-group">
+            <label for="shipping-fee">Phí ship</label>
+            <input type="text" id="shipping-fee" value="0" oninput="formatAndCalculateTotal(this, 'shipping')">
+        </div>
+        <div class="input-group">
+            <label for="final-total">Tổng giá thanh toán</label>
+            <input type="text" id="final-total" readonly>
+        </div>
+
+        <div class="actions">
+            <button onclick="generatePDF()">Tạo Hóa Đơn</button>
+        </div>
+    </div>
+
+    <script>
+        const shops = [
+            { shortName: "SON", fullName: "Phối Áo Đẹp", phone: "0789.86.3879" }
+        ];
+
+        function populateShopDropdown() {
+            const shopDropdown = document.getElementById('shop-name');
+            shops.forEach(shop => {
+                const option = document.createElement('option');
+                option.value = shop.shortName;
+                option.textContent = shop.fullName;
+                shopDropdown.appendChild(option);
+            });
+        }
+
+        function updateShopInfo() {
+            const shopDropdown = document.getElementById('shop-name');
+            const shop = shops.find(s => s.shortName === shopDropdown.value);
+            if (shop) {
+                document.getElementById('shop-phone').value = shop.phone;
+                document.getElementById('invoice-id').value = shop.shortName + Date.now();
+                document.getElementById('invoice-date').value = new Date().toLocaleString('vi-VN');
+            }
+        }
+
+        function addProductRow() {
+            const table = document.getElementById('order-table').getElementsByTagName('tbody')[0];
+            const row = table.insertRow();
+            row.innerHTML = `
+                <td><input type="text" placeholder="Tên sản phẩm"></td>
+                <td><input type="text" placeholder="Đơn giá" oninput="formatAndCalculateRowTotal(this, 'price')"></td>
+                <td><input type="text" placeholder="Số lượng" oninput="formatAndCalculateRowTotal(this, 'quantity')"></td>
+                <td><input type="text" readonly></td>
+                <td><button onclick="removeProductRow(this)">Xóa</button></td>`;
+        }
+
+        function removeProductRow(button) {
+            button.parentElement.parentElement.remove();
+            calculateTotal();
+        }
+
+        function formatNumber(num) {
+            return num.toLocaleString('vi-VN');
+        }
+
+        function parseNumber(numStr) {
+            return parseInt(numStr.replace(/\D/g, '')) || 0;
+        }
+
+        function formatAndCalculateRowTotal(input, type) {
+            const row = input.parentElement.parentElement;
+            if (type === 'price' || type === 'quantity') {
+                input.value = formatNumber(parseNumber(input.value));
+            }
+            const price = parseNumber(row.cells[1].getElementsByTagName('input')[0].value);
+            const quantity = parseNumber(row.cells[2].getElementsByTagName('input')[0].value);
+            const total = price * quantity;
+            row.cells[3].getElementsByTagName('input')[0].value = formatNumber(total);
+            calculateTotal();
+        }
+
+        // Định dạng và tính toán tổng cộng (giảm giá, phí ship)
+        function formatAndCalculateTotal(input, type) {
+            if (type === 'discount' || type === 'shipping') {
+                input.value = formatNumber(parseNumber(input.value));
+            }
+            calculateTotal();
+        }
+
+        function calculateTotal() {
+            const table = document.getElementById('order-table').getElementsByTagName('tbody')[0];
+            let totalQuantity = 0, totalPrice = 0;
+
+            Array.from(table.rows).forEach(row => {
+                const quantity = parseNumber(row.cells[2].getElementsByTagName('input')[0].value);
+                const total = parseNumber(row.cells[3].getElementsByTagName('input')[0].value);
+                totalQuantity += quantity;
+                totalPrice += total;
+            });
+
+            const discount = parseNumber(document.getElementById('discount').value);
+            const shippingFee = parseNumber(document.getElementById('shipping-fee').value);
+            const finalTotal = totalPrice - discount + shippingFee;
+
+            document.getElementById('total-quantity').value = formatNumber(totalQuantity);
+            document.getElementById('total-price').value = formatNumber(totalPrice);
+            document.getElementById('final-total').value = formatNumber(finalTotal);
+        }
+
+        // Hàm tạo file PDF
+        function generatePDF() {
+            const jsPDF = window.jspdf.jsPDF;
+        
+            // Base64 font TIMES.TTF
+            const base64Font = `
+                data:font/truetype;charset=utf-8;base64,<Base64 của bạn>`;
+            
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: [105, 148] // Khổ A6
+            });
+        
+            // Nhúng font
+            pdf.addFileToVFS('Times.ttf', base64Font);
+            pdf.addFont('Times.ttf', 'Times', 'normal');
+            pdf.setFont('Times', 'normal');
+        
+            // A. Thông tin shop
+            const shopName = document.getElementById('shop-name').options[document.getElementById('shop-name').selectedIndex].text;
+            const shopPhone = document.getElementById('shop-phone').value;
+            const invoiceId = document.getElementById('invoice-id').value;
+            const invoiceDate = document.getElementById('invoice-date').value;
+        
+            // B. Thông tin khách hàng
+            const customerName = document.getElementById('customer-name').value;
+            const customerPhone = document.getElementById('customer-phone').value;
+            const customerAddress = document.getElementById('customer-address').value;
+        
+            // C. Thông tin đơn hàng
+            const tableRows = Array.from(document.getElementById('order-table').getElementsByTagName('tbody')[0].rows);
+            const totalQuantity = document.getElementById('total-quantity').value;
+            const totalPrice = document.getElementById('total-price').value;
+            const discount = document.getElementById('discount').value;
+            const shippingFee = document.getElementById('shipping-fee').value;
+            const finalTotal = document.getElementById('final-total').value;
+        
+            // Nội dung PDF
+            pdf.setFontSize(10);
+            pdf.text('HÓA ĐƠN BÁN HÀNG', 52.5, 10, { align: 'center' });
+        
+            // Thông tin shop
+            pdf.setFontSize(9);
+            pdf.text(`Tên Shop: ${shopName}`, 5, 20);
+            pdf.text(`Số điện thoại: ${shopPhone}`, 5, 25);
+            pdf.text(`Mã hóa đơn: ${invoiceId}`, 5, 30);
+            pdf.text(`Ngày giờ: ${invoiceDate}`, 5, 35);
+        
+            // Thông tin khách hàng
+            pdf.text('Thông tin khách hàng:', 5, 45);
+            pdf.text(`Tên: ${customerName}`, 5, 50);
+            pdf.text(`SĐT: ${customerPhone}`, 5, 55);
+            pdf.text(`Địa chỉ: ${customerAddress}`, 5, 60);
+        
+            // Thông tin đơn hàng
+            pdf.text('Thông tin đơn hàng:', 5, 70);
+            let currentY = 75;
+        
+            // Header bảng
+            pdf.setFontSize(8);
+            pdf.text('Tên sản phẩm', 5, currentY);
+            pdf.text('Đơn giá', 45, currentY);
+            pdf.text('Số lượng', 75, currentY);
+            pdf.text('Thành tiền', 90, currentY);
+            currentY += 5;
+        
+            // Dữ liệu sản phẩm
+            tableRows.forEach(row => {
+                const productName = row.cells[0].getElementsByTagName('input')[0].value;
+                const unitPrice = row.cells[1].getElementsByTagName('input')[0].value;
+                const quantity = row.cells[2].getElementsByTagName('input')[0].value;
+                const total = row.cells[3].getElementsByTagName('input')[0].value;
+        
+                pdf.text(productName, 5, currentY);
+                pdf.text(unitPrice, 45, currentY);
+                pdf.text(quantity, 75, currentY);
+                pdf.text(total, 90, currentY);
+                currentY += 5;
+            });
+        
+            // Tổng số lượng, thành tiền và phí
+            currentY += 5;
+            pdf.text(`Tổng số lượng: ${totalQuantity}`, 5, currentY);
+            currentY += 5;
+            pdf.text(`Tổng thành tiền: ${totalPrice}`, 5, currentY);
+            currentY += 5;
+            pdf.text(`Giảm giá: ${discount}`, 5, currentY);
+            currentY += 5;
+            pdf.text(`Phí ship: ${shippingFee}`, 5, currentY);
+            currentY += 5;
+            pdf.text(`Tổng thanh toán: ${finalTotal}`, 5, currentY);
+        
+            // Lời cảm ơn
+            currentY += 10;
+            pdf.setFontSize(10);
+            pdf.text('Cảm ơn quý khách. Hẹn gặp lại!', 35, currentY, { align: 'center' });
+        
+            // Xuất PDF
+            pdf.save('HoaDon.pdf');
+        }
+        
+        populateShopDropdown();
+        updateShopInfo();
+    </script>
+</body>
+</html>
