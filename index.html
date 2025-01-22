@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <title>Web Tạo Hóa Đơn</title>
     <style>
         body {
@@ -42,6 +42,43 @@
         .actions {
             margin-top: 20px;
             text-align: right;
+        }
+        #popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 400px;
+            background: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            z-index: 1000;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .btn {
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -127,6 +164,16 @@
         <div class="actions">
             <button onclick="generatePDF()">Tạo Hóa Đơn</button>
         </div>
+        <div id="overlay" onclick="hidePopup()"></div>
+        <div id="popup">
+            <div id="popup-content" class="popup-content">
+                <!-- Nội dung hóa đơn sẽ được chèn vào đây -->
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="downloadPDF()">In Hóa Đơn</button>
+                <button class="btn" onclick="hidePopup()">Đóng</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -198,7 +245,7 @@
             }
             calculateTotal();
         }
-
+        
         function calculateTotal() {
             const table = document.getElementById('order-table').getElementsByTagName('tbody')[0];
             let totalQuantity = 0, totalPrice = 0;
@@ -218,109 +265,112 @@
             document.getElementById('total-price').value = formatNumber(totalPrice);
             document.getElementById('final-total').value = formatNumber(finalTotal);
         }
-
-        // Hàm tạo file PDF
-        function generatePDF() {
-            const jsPDF = window.jspdf.jsPDF;
-        
-            // Base64 font TIMES.TTF
-            const base64Font = `
-                data:font/truetype;charset=utf-8;base64,<Base64 của bạn>`;
-            
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: [105, 148] // Khổ A6
-            });
-        
-            // Nhúng font
-            pdf.addFileToVFS('Times.ttf', base64Font);
-            pdf.addFont('Times.ttf', 'Times', 'normal');
-            pdf.setFont('Times', 'normal');
-        
-            // A. Thông tin shop
-            const shopName = document.getElementById('shop-name').options[document.getElementById('shop-name').selectedIndex].text;
-            const shopPhone = document.getElementById('shop-phone').value;
-            const invoiceId = document.getElementById('invoice-id').value;
-            const invoiceDate = document.getElementById('invoice-date').value;
-        
-            // B. Thông tin khách hàng
-            const customerName = document.getElementById('customer-name').value;
-            const customerPhone = document.getElementById('customer-phone').value;
-            const customerAddress = document.getElementById('customer-address').value;
-        
-            // C. Thông tin đơn hàng
-            const tableRows = Array.from(document.getElementById('order-table').getElementsByTagName('tbody')[0].rows);
-            const totalQuantity = document.getElementById('total-quantity').value;
-            const totalPrice = document.getElementById('total-price').value;
-            const discount = document.getElementById('discount').value;
-            const shippingFee = document.getElementById('shipping-fee').value;
-            const finalTotal = document.getElementById('final-total').value;
-        
-            // Nội dung PDF
-            pdf.setFontSize(10);
-            pdf.text('HÓA ĐƠN BÁN HÀNG', 52.5, 10, { align: 'center' });
-        
-            // Thông tin shop
-            pdf.setFontSize(9);
-            pdf.text(`Tên Shop: ${shopName}`, 5, 20);
-            pdf.text(`Số điện thoại: ${shopPhone}`, 5, 25);
-            pdf.text(`Mã hóa đơn: ${invoiceId}`, 5, 30);
-            pdf.text(`Ngày giờ: ${invoiceDate}`, 5, 35);
-        
-            // Thông tin khách hàng
-            pdf.text('Thông tin khách hàng:', 5, 45);
-            pdf.text(`Tên: ${customerName}`, 5, 50);
-            pdf.text(`SĐT: ${customerPhone}`, 5, 55);
-            pdf.text(`Địa chỉ: ${customerAddress}`, 5, 60);
-        
-            // Thông tin đơn hàng
-            pdf.text('Thông tin đơn hàng:', 5, 70);
-            let currentY = 75;
-        
-            // Header bảng
-            pdf.setFontSize(8);
-            pdf.text('Tên sản phẩm', 5, currentY);
-            pdf.text('Đơn giá', 45, currentY);
-            pdf.text('Số lượng', 75, currentY);
-            pdf.text('Thành tiền', 90, currentY);
-            currentY += 5;
-        
-            // Dữ liệu sản phẩm
-            tableRows.forEach(row => {
-                const productName = row.cells[0].getElementsByTagName('input')[0].value;
-                const unitPrice = row.cells[1].getElementsByTagName('input')[0].value;
-                const quantity = row.cells[2].getElementsByTagName('input')[0].value;
-                const total = row.cells[3].getElementsByTagName('input')[0].value;
-        
-                pdf.text(productName, 5, currentY);
-                pdf.text(unitPrice, 45, currentY);
-                pdf.text(quantity, 75, currentY);
-                pdf.text(total, 90, currentY);
-                currentY += 5;
-            });
-        
-            // Tổng số lượng, thành tiền và phí
-            currentY += 5;
-            pdf.text(`Tổng số lượng: ${totalQuantity}`, 5, currentY);
-            currentY += 5;
-            pdf.text(`Tổng thành tiền: ${totalPrice}`, 5, currentY);
-            currentY += 5;
-            pdf.text(`Giảm giá: ${discount}`, 5, currentY);
-            currentY += 5;
-            pdf.text(`Phí ship: ${shippingFee}`, 5, currentY);
-            currentY += 5;
-            pdf.text(`Tổng thanh toán: ${finalTotal}`, 5, currentY);
-        
-            // Lời cảm ơn
-            currentY += 10;
-            pdf.setFontSize(10);
-            pdf.text('Cảm ơn quý khách. Hẹn gặp lại!', 35, currentY, { align: 'center' });
-        
-            // Xuất PDF
-            pdf.save('HoaDon.pdf');
+        function getData() {
+            return {
+                shopName: document.getElementById('shop-name').options[document.getElementById('shop-name').selectedIndex].text,
+                shopPhone: document.getElementById('shop-phone').value,
+                invoiceId: document.getElementById('invoice-id').value,
+                invoiceDate: document.getElementById('invoice-date').value,
+                customerName: document.getElementById('customer-name').value,
+                customerPhone: document.getElementById('customer-phone').value,
+                customerAddress: document.getElementById('customer-address').value,
+                orderItems: Array.from(document.getElementById('order-table').getElementsByTagName('tbody')[0].rows).map(row => ({
+                    productName: row.cells[0].getElementsByTagName('input')[0].value,
+                    unitPrice: row.cells[1].getElementsByTagName('input')[0].value,
+                    quantity: row.cells[2].getElementsByTagName('input')[0].value,
+                    total: row.cells[3].getElementsByTagName('input')[0].value,
+                })),
+                totalQuantity: document.getElementById('total-quantity').value,
+                totalPrice: document.getElementById('total-price').value,
+                discount: document.getElementById('discount').value,
+                shippingFee: document.getElementById('shipping-fee').value,
+                finalTotal: document.getElementById('final-total').value,
+            };
         }
         
+        // 2. Render dữ liệu ra thẻ HTML khổ A6
+        function renderHTML(data) {
+            const htmlContent = `
+                <div id="invoice" style="width: 105mm; height: 148mm; padding: 10mm; font-family: 'Times New Roman', Times, serif; font-size: 10px; border: 1px solid #000; box-sizing: border-box; margin: 0 auto;">
+                    <h3 style="text-align: center;">HÓA ĐƠN BÁN HÀNG</h3>
+                    <p><strong>Tên Shop:</strong> ${data.shopName}</p>
+                    <p><strong>Số điện thoại:</strong> ${data.shopPhone}</p>
+                    <p><strong>Mã hóa đơn:</strong> ${data.invoiceId}</p>
+                    <p><strong>Ngày giờ:</strong> ${data.invoiceDate}</p>
+                    <p><strong>Thông tin khách hàng:</strong></p>
+                    <p>- Tên: ${data.customerName}</p>
+                    <p>- SĐT: ${data.customerPhone}</p>
+                    <p>- Địa chỉ: ${data.customerAddress}</p>
+                    <p><strong>Thông tin đơn hàng:</strong></p>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">Tên sản phẩm</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">Đơn giá</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">Số lượng</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: center;">Thành tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.orderItems.map(item => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;">${item.productName}</td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;">${item.unitPrice}</td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;">${item.quantity}</td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: center;">${item.total}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <p><strong>Tổng số lượng:</strong> ${data.totalQuantity}</p>
+                    <p><strong>Tổng thành tiền:</strong> ${data.totalPrice}₫</p>
+                    <p><strong>Giảm giá:</strong> ${data.discount}₫</p>
+                    <p><strong>Phí ship:</strong> ${data.shippingFee}₫</p>
+                    <p><strong>Tổng thanh toán:</strong> ${data.finalTotal}₫</p>
+                    <svg id="barcode" style="margin-top: 20px;"></svg>
+                    <p style="text-align: center; margin-top: 20px;">Cảm ơn quý khách. Hẹn gặp lại!</p>
+                </div>
+            `;
+            return htmlContent;
+        }
+        function convertHTMLToPDF(htmlContent) {
+            const element = document.createElement('div');
+            element.innerHTML = htmlContent;
+            document.body.appendChild(element);
+            
+            const opt = {
+                margin: [0, 0],
+                filename: 'HoaDon.pdf',
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: [105, 148], orientation: 'portrait' }
+            };
+        
+            html2pdf().set(opt).from(element).save().then(() => {
+                document.body.removeChild(element);
+            });
+        }
+        // Hàm tạo file PDF
+        function generatePDF() {
+            const data = getData();
+            const htmlContent = renderHTML(data);   
+            convertHTMLToPDF(htmlContent);
+        }
+        function downloadPDF() {
+            const element = document.getElementById('popup-content');
+            const options = {
+                margin: 10,
+                filename: 'HoaDon.pdf',
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(options).from(element).save();
+        }
+        function generatePopup() {
+            const data = getData();
+            const htmlContent = renderHTML(data);
+            document.getElementById('popup-content').innerHTML = htmlContent;
+            showPopup();
+        }
         populateShopDropdown();
         updateShopInfo();
     </script>
